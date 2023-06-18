@@ -1,0 +1,37 @@
+spring:
+  application:
+    name: api-gateway-service
+  cloud:
+    gateway:
+      discovery:
+        locator:
+          enabled: true
+      routes:
+        - id: dictionary-service
+          uri: lb://dictionary-service
+          predicates:
+          - Path=/dictionary-service/**
+        - id: auth-service
+          uri: lb://auth-service
+          predicates:
+            - Path=/auth-service/**
+        - id: product-service
+          uri: lb://product-service
+          predicates:
+            - Path=/product-service/**
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "*"
+  endpoint:
+    health:
+      show-details: always
+      gateway:
+        enabled: true
+server:
+  port: 8000
+eureka:
+  client:
+    serviceURL:
+      defaultZone: http://localhost:8761/eureka
