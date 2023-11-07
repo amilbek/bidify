@@ -1,19 +1,20 @@
-package kz.bidify.authservice.service.impl;
+package kz.bidify.authservice.facade.impl;
 
 import kz.bidify.authservice.config.KeycloakConfig;
 import kz.bidify.authservice.exception.CustomException;
+import kz.bidify.authservice.facade.AuthFacade;
 import kz.bidify.authservice.model.dto.AppUserCreateDTO;
 import kz.bidify.authservice.model.dto.AppUserDTO;
 import kz.bidify.authservice.model.dto.AuthRequestDTO;
 import kz.bidify.authservice.model.entity.AppUser;
-import kz.bidify.authservice.repository.AppUserRepository;
-import kz.bidify.authservice.service.AuthService;
+import kz.bidify.authservice.service.AppUserService;
 import kz.bidify.authservice.service.EmailService;
 import kz.bidify.authservice.util.ModelMapperUtil;
 import kz.bidify.authservice.validation.BirthDateValidation;
 import kz.bidify.authservice.validation.EmailValidation;
 import kz.bidify.authservice.validation.PasswordConfirmationValidation;
 import kz.bidify.authservice.validation.PasswordValidation;
+import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.keycloak.admin.client.Keycloak;
@@ -29,30 +30,25 @@ import javax.ws.rs.BadRequestException;
 import java.time.LocalDate;
 import java.util.*;
 
-@Slf4j
+@RequiredArgsConstructor
 @Service
-public class AuthServiceImpl implements AuthService {
+@Slf4j
+public class AuthFacadeImpl implements AuthFacade {
 
-    private final AppUserRepository appUserRepository;
+    private final AppUserService service;
     private final Keycloak keycloak;
     private final EmailService emailService;
 
     @Value("${keycloak.realm_id}")
     private String realmId;
 
-    public AuthServiceImpl(AppUserRepository appUserRepository, EmailService emailService) {
-        this.appUserRepository = appUserRepository;
-        this.emailService = emailService;
-        this.keycloak = KeycloakConfig.getInstance();
-    }
-
     @Override
     public AccessTokenResponse login(AuthRequestDTO authRequestDTO) {
-        Keycloak keycloak = KeycloakConfig.newKeycloakBuilderWithPasswordCredentials(authRequestDTO.getUsername(), authRequestDTO.getPassword());
+        Keycloak keycloakBuilderWithPasswordCredentials = KeycloakConfig.newKeycloakBuilderWithPasswordCredentials(authRequestDTO.getUsername(), authRequestDTO.getPassword());
 
         AccessTokenResponse accessTokenResponse;
         try {
-            accessTokenResponse = keycloak.tokenManager().getAccessToken();
+            accessTokenResponse = keycloakBuilderWithPasswordCredentials.tokenManager().getAccessToken();
             return accessTokenResponse;
         } catch (BadRequestException ex) {
             throw new BadRequestException("invalid account. User probably hasn't verified email.", ex);
@@ -61,7 +57,7 @@ public class AuthServiceImpl implements AuthService {
 
     @SneakyThrows
     @Override
-    public AppUserDTO saveAppUser(AppUserCreateDTO appUserCreateDTO) {
+    public AppUserDTO register(AppUserCreateDTO appUserCreateDTO) {
         checkUserValidations(appUserCreateDTO);
         createKeycloakUser(appUserCreateDTO);
         UserRepresentation savedUser = getUserByParameters(appUserCreateDTO.getUsername(),
@@ -80,12 +76,12 @@ public class AuthServiceImpl implements AuthService {
                 .role("USER")
                 .build();
         emailService.sendVerifyEmail(savedUser.getId());
-        return ModelMapperUtil.map(appUserRepository.save(appUser), AppUserDTO.class);
+        return ModelMapperUtil.map(service.save(appUser), AppUserDTO.class);
     }
 
     private void checkUserValidations(AppUserCreateDTO appUserCreateDTO) {
         List<String> errors = new ArrayList<>();
-        if (!appUserRepository.findAllByEmailOrUsername(appUserCreateDTO.getEmail(), appUserCreateDTO.getUsername()).isEmpty()) {
+        if (service.existsByEmailOrUsername(appUserCreateDTO.getEmail(), appUserCreateDTO.getUsername())) {
             errors.add("User exists with email or username");
         }
         if (!BirthDateValidation.isValid(appUserCreateDTO.getBirthDate())) {
@@ -142,8 +138,8 @@ public class AuthServiceImpl implements AuthService {
     }
 
     private void addRealmRoleToUser(String userId){
-        Keycloak keycloak = KeycloakConfig.getInstance();
-        UserResource user = keycloak
+        Keycloak instance = KeycloakConfig.getInstance();
+        UserResource user = instance
                 .realm(realmId)
                 .users()
                 .get(userId);

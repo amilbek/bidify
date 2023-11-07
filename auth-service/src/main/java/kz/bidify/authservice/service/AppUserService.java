@@ -1,12 +1,13 @@
 package kz.bidify.authservice.service;
 
-import kz.bidify.authservice.model.dto.AppUserCreateDTO;
-import kz.bidify.authservice.model.dto.AppUserDTO;
-import org.springframework.stereotype.Service;
+import kz.bidify.authservice.model.entity.AppUser;
 
 
-@Service
 public interface AppUserService {
 
-    AppUserDTO getAppUser();
+    AppUser getAppUser();
+
+    AppUser save(AppUser appUser);
+
+    boolean existsByEmailOrUsername(String email, String username);
 }
